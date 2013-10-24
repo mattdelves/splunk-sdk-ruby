@@ -15,9 +15,9 @@
 #++
 
 ##
-# Provides the +Context+ class, the basic class representing a connection to a 
-# Splunk server. +Context+ is minimal, and only handles authentication and calls 
-# to the REST API. For most uses, you will want to use its subclass +Service+, 
+# Provides the +Context+ class, the basic class representing a connection to a
+# Splunk server. +Context+ is minimal, and only handles authentication and calls
+# to the REST API. For most uses, you will want to use its subclass +Service+,
 # which adds convenient methods to access the various collections and entities
 # on Splunk.
 #
@@ -40,7 +40,7 @@ module Splunk
   # For most use, you will want to use +Context+'s subclass +Service+, which
   # provides convenient access to Splunk's various collections and entities.
   #
-  # To use the +Context+ class, create a new +Context+ with a hash of arguments 
+  # To use the +Context+ class, create a new +Context+ with a hash of arguments
   # giving the details of the connection, and call the +login+ method on it:
   #
   #     context = Splunk::Context.new(:username => "admin",
@@ -80,6 +80,7 @@ module Splunk
       # local accessor.
       @namespace = args.fetch(:namespace,
                               Splunk::namespace(:sharing => "default"))
+      @path = args.fetch(:path, "")
     end
 
     ##
@@ -149,6 +150,8 @@ module Splunk
     #
     attr_reader :namespace
 
+    attr_reader :path
+
     ##
     # Opens a TCP socket to the Splunk HTTP server.
     #
@@ -176,9 +179,9 @@ module Splunk
     ##
     # Logs into Splunk and set the token field on this +Context+.
     #
-    # The +login+ method assumes that the +Context+ has a username and password 
-    # set. You cannot pass them as arguments to this method. On a successful 
-    # login, the token field of the +Context+ is set to the token returned by 
+    # The +login+ method assumes that the +Context+ has a username and password
+    # set. You cannot pass them as arguments to this method. On a successful
+    # login, the token field of the +Context+ is set to the token returned by
     # Splunk, and all further requests to the server will send this token.
     #
     # If this +Context+ already has a token that is not +nil+, it is already
@@ -198,7 +201,8 @@ module Splunk
                          :resource => ["auth", "login"],
                          :query => {},
                          :headers => {},
-                         :body => {:username=>@username, :password=>@password})
+                         :body => {:username=>@username, :password=>@password},
+                         :path => @path)
       # The response looks like:
       # <response>
       # <sessionKey>da950729652f8255c230afe37bdf8b97</sessionKey>
@@ -223,8 +227,8 @@ module Splunk
     ##
     # Issues an HTTP(S) request to the Splunk instance.
     #
-    # The +request+ method does not take a URL. Instead, it takes a hash of 
-    # optional arguments specifying an action in the REST API. This avoids the 
+    # The +request+ method does not take a URL. Instead, it takes a hash of
+    # optional arguments specifying an action in the REST API. This avoids the
     # problem knowing whether a given piece of data is URL encoded or not.
     #
     # The arguments are:
@@ -256,10 +260,10 @@ module Splunk
     #   be URL encoded, as +request+ will handle all such encoding.
     #   (default: {})
     #
-    # If Splunk responds with an HTTP code 2xx, the +request+ method returns 
-    # an HTTP response object (the import methods of which are +code+, 
-    # +message+, and +body+, and +each+ to enumerate over the response 
-    # headers). If the HTTP code is not 2xx, +request+ raises a 
+    # If Splunk responds with an HTTP code 2xx, the +request+ method returns
+    # an HTTP response object (the import methods of which are +code+,
+    # +message+, and +body+, and +each+ to enumerate over the response
+    # headers). If the HTTP code is not 2xx, +request+ raises a
     # +SplunkHTTPError+.
     #
     # *Examples:*
@@ -283,6 +287,7 @@ module Splunk
       query = args.fetch(:query, {})
       headers = args.fetch(:headers, {})
       body = args.fetch(:body, {})
+      path = @path
 
       if method != :GET && method != :POST && method != :DELETE
         raise ArgumentError.new("Method must be one of :GET, :POST, or " +
@@ -306,7 +311,7 @@ module Splunk
       # Construct the URL for the request.
       url = ""
       url << "#{(scheme || @scheme).to_s}://"
-      url << "#{host || @host}:#{(port || @port).to_s}/"
+      url << "#{host || @host}:#{(port || @port).to_s}#{path}/"
       url << (namespace.to_path_fragment() + resource).
           map {|fragment| URI::encode(fragment)}.
           join("/")
@@ -325,7 +330,7 @@ module Splunk
     # as part of an Atom feed, you should prefer the +request+ method, which
     # has much clearer semantics.
     #
-    # The +request_by_url+ method takes a hash of arguments. The recognized 
+    # The +request_by_url+ method takes a hash of arguments. The recognized
     # arguments are:
     #
     # * +:url+: (a +URI+ object or a +String+) The URL, including authority, to
@@ -350,10 +355,10 @@ module Splunk
     #   be URL encoded, as +request+ will handle all such encoding.
     #   (default: {})
     #
-    # If Splunk responds with an HTTP code 2xx, the +request_by_url+ method 
-    # returns an HTTP response object (the import methods of which are +code+, 
-    # +message+, and +body+, and +each+ to enumerate over the response 
-    # headers). If the HTTP code is not 2xx, the +request_by_url+ method 
+    # If Splunk responds with an HTTP code 2xx, the +request_by_url+ method
+    # returns an HTTP response object (the import methods of which are +code+,
+    # +message+, and +body+, and +each+ to enumerate over the response
+    # headers). If the HTTP code is not 2xx, the +request_by_url+ method
     # raises a +SplunkHTTPError+.
     #
     def request_by_url(args)
@@ -414,13 +419,13 @@ module Splunk
     ##
     # Restarts this Splunk instance.
     #
-    # The +restart+ method may be called with an optional timeout. If you pass 
-    # a timeout, +restart+ will wait up to that number of seconds for the 
-    # server to come back up before returning. If +restart+ did not time out, 
+    # The +restart+ method may be called with an optional timeout. If you pass
+    # a timeout, +restart+ will wait up to that number of seconds for the
+    # server to come back up before returning. If +restart+ did not time out,
     # it leaves the +Context+ logged in when it returns.
     #
     # If the timeout is, omitted, the +restart+ method returns immediately, and
-    # you will have to ascertain if Splunk has come back up yourself, for 
+    # you will have to ascertain if Splunk has come back up yourself, for
     # example with code like:
     #
     #     context = Context.new(...).login()
